@@ -1,3 +1,5 @@
+# args.py
+
 import argparse
 import datetime
 import os
@@ -34,7 +36,7 @@ def modify_args(args):
         raise NotImplementedError
 
     if not hasattr(args, "save_path") or args.save_path is None:
-        args.save_path = f"outputs/{args.arch}_{args.evalmode}_{args.data}_{format(str(datetime.datetime.now()))}_{args.num_clients}_{args.num_rounds}_{args.sample_rate}_{args.alpha}"
+        args.save_path = f"outputs/hrank0.7"
 
     return args
 
@@ -51,8 +53,8 @@ exp_group = arg_parser.add_argument_group('exp', 'experiment setting')
 exp_group.add_argument('--save_path', default=None,
                        type=str, metavar='SAVE',
                        help='path to the experiment logging directory')
-exp_group.add_argument('--resume', action='store_true',
-                       help='path to latest checkpoint (default: none)')
+exp_group.add_argument('--resume', default='', type=str, metavar='PATH',
+                    help='path to latest checkpoint (default: none)')
 exp_group.add_argument('--evalmode', default=None,
                        choices=['local', 'global'],
                        help='which mode to evaluate')
@@ -68,23 +70,23 @@ exp_group.add_argument('--use_gpu', default=1, type=int, help='Use CPU if zero')
 # dataset related
 data_group = arg_parser.add_argument_group('data', 'dataset setting')
 data_group.add_argument('--data', metavar='D', default='cifar100',
-                        choices=['cifar10', 'cifar100', 'imagenet', 'sst2', 'ag_news'],
-                        help='data to work on')
+                         choices=['cifar10', 'cifar100', 'imagenet', 'sst2', 'ag_news'],
+                         help='data to work on')
 data_group.add_argument('--data-root', metavar='DIR', default='data',
-                        help='path to dataset (default: data)')
+                         help='path to dataset (default: data)')
 data_group.add_argument('--use-valid', action='store_true',
-                        help='use validation set or not')
+                         help='use validation set or not')
 data_group.add_argument('-j', '--workers', default=0, type=int, metavar='N',
-                        help='number of data loading workers (default: 0)')
+                         help='number of data loading workers (default: 0)')
 data_group.add_argument('-jj', '--num_fed_workers', default=1, type=int, metavar='N',
-                        help='number of fl workers (default: 1)')
+                         help='number of fl workers (default: 1)')
 # model arch related
 arch_group = arg_parser.add_argument_group('arch', 'model architecture setting')
 arch_group.add_argument('--arch', '-a', metavar='ARCH', default='resnet110_4',
-                        type=str, choices=model_names,
-                        help='model architecture: ' +
-                             ' | '.join(model_names) +
-                             ' (default: resnet110_4)')
+                         type=str, choices=model_names,
+                         help='model architecture: ' +
+                              ' | '.join(model_names) +
+                              ' (default: resnet110_4)')
 arch_group.add_argument('--ee_locs', type=int, nargs='*', default=[], help='ee locations')
 
 # training related
@@ -93,7 +95,7 @@ optim_group = arg_parser.add_argument_group('optimization', 'optimization settin
 optim_group.add_argument('--start_round', default=0, type=int, metavar='N',
                          help='manual round number (useful on restarts)')
 optim_group.add_argument('-b', '--batch-size', type=int, help='mini-batch size')
-optim_group.add_argument('--KD_gamma', type=float, default=0, help='KD gamma')
+optim_group.add_argument('--KD_gamma', type=float, default=0.1, help='KD gamma')
 optim_group.add_argument('--KD_T', type=int, default=3, help='KD T')
 
 # FL related
@@ -104,7 +106,7 @@ fl_group.add_argument('--horizontal_scale_ratios', type=int, nargs='*', default=
                       help='model horizontal split indices for each complexity level')
 fl_group.add_argument('--client_split_ratios', type=float, nargs='*', default=[0.25, 0.25, 0.25, 0.25],
                       help='client ratio at each complexity level')
-fl_group.add_argument('--num_rounds', type=int, default=2,
+fl_group.add_argument('--num_rounds', type=int, default=400,
                       help='number of rounds')
 fl_group.add_argument('--num_clients', type=int, default=100,
                       help='number of clients')
@@ -114,3 +116,17 @@ fl_group.add_argument('--alpha', type=int, default=100,
                       help='data nonIID alpha')
 fl_group.add_argument('-trs', '--track_running_stats', action='store_true',
                       help='trs')
+
+# ---- HRank 参数组 (新增) ----
+hrank_group = arg_parser.add_argument_group('hrank', 'HRank Pruning Settings')
+hrank_group.add_argument('--hrank_trigger_round', type=int, default=20,
+                         help='Federated learning round to trigger HRank pruning (e.g., 1 for after round 0, -1 to disable)')
+hrank_group.add_argument('--hrank_representative_batch_size', type=int, default=64,
+                         help='Batch size for representative data in HRank analysis')
+
+
+if __name__ == '__main__':
+    parser = arg_parser()
+    args = parser.parse_args()
+    args = modify_args(args)
+    print(args)

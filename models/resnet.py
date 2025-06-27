@@ -132,6 +132,7 @@ class ResNet(nn.Module):
             factor = 1
 
         self.scale = scale
+        scale=1
         self.in_planes = int(16 * scale * factor)
         self.num_blocks = len(ee_layer_locations) + 1
         self.num_classes = num_classes
@@ -158,8 +159,10 @@ class ResNet(nn.Module):
 
         layer1, ee1 = self._make_layer(block, int(16 * scale * factor), layers[0], stride=1,
                                        ee_layer_locations=[l for i, l in enumerate(ee_layer_list) if ee_block_list[i] == 0])
+        scale=0.7
         layer2, ee2 = self._make_layer(block, int(32 * scale * factor), layers[1], stride=2,
                                        ee_layer_locations=[l for i, l in enumerate(ee_layer_list) if ee_block_list[i] == 1])
+        scale=0.49
         layer3, ee3 = self._make_layer(block, int(64 * scale * factor), layers[2], stride=2,
                                        ee_layer_locations=[l for i, l in enumerate(ee_layer_list) if ee_block_list[i] == 2])
         self.layers = nn.ModuleList([layer1, layer2, layer3])

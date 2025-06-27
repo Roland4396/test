@@ -27,7 +27,7 @@ class KDLoss(nn.Module):
         _ce = self.ce_loss(pred, target)
         T = self.T
         if self.gamma and gamma_active:
-            # _ce = (1. - self.gamma) * _ce
+            _ce = (1. - self.gamma) * _ce
             _kld = self.kld_loss(self.log_softmax(pred / T), self.softmax(soft_target / T)) * self.gamma * T * T
         else:
             _kld = 0
