@@ -63,11 +63,19 @@ def get_filter_ranks(model, loader):
 
     return avg_ranks
 
-def refine_mask_by_swap(base_mask, hrank_scores):
+def refine_mask_by_swap(base_mask, hrank_scores, use_max_rank):
     """
-    此函数保持不变，因为它只依赖于输入的 hrank_scores 列表，
-    而与分数的计算方式无关。
+    根据 HRank 分数，通过交换通道来优化剪枝掩码。
+
+    Args:
+        base_mask (torch.Tensor): 初始的二进制掩码 (0代表剪枝, 1代表保留)。
+        hrank_scores (list or torch.Tensor): 对应层所有通道的 HRank 分数。
+        use_max_rank (bool): 决定剪枝策略。
+                             - True: 优先保留分数高的通道 (最大化秩)。
+                             - False: 优先保留分数低的通道 (最小化秩)。
     """
+    # ==================== 代码修改开始 ====================
+
     num_prune = int(len(base_mask) - torch.sum(base_mask))
     if num_prune == 0:
         return base_mask
@@ -83,25 +91,54 @@ def refine_mask_by_swap(base_mask, hrank_scores):
     active_ranks = hrank_scores[active_indices]
     inactive_ranks = hrank_scores[inactive_indices]
     
-    # a `large` value that is larger than any rank
-    # for those pruned channels that we do not want to make them active
-    for i, rank in enumerate(inactive_ranks):
-        if rank == 0:
-            inactive_ranks[i] = -100 # a small value
+    # 策略选择：根据 use_max_rank 决定排序方式和比较逻辑
+    if use_max_rank:
+        # **最大化秩策略 (原始逻辑)**
+        # 目标：用未激活通道中分数最高的，去替换已激活通道中分数最低的。
+        
+        # 找到已激活通道中分数最低的
+        sorted_active_ranks, sorted_active_indices = torch.sort(active_ranks)
+        
+        # 找到未激活通道中分数最高的
+        # 这里对 rank 为 0 的特殊处理可以保留，因为它旨在避免激活完全无效的通道
+        for i, rank in enumerate(inactive_ranks):
+            if rank == 0:
+                inactive_ranks[i] = -100 # 一个很小的值，使其在降序排序中排在最后
 
-    sorted_active_ranks, sorted_active_indices = torch.sort(active_ranks)
-    sorted_inactive_ranks, sorted_inactive_indices = torch.sort(inactive_ranks, descending=True)
+        sorted_inactive_ranks, sorted_inactive_indices = torch.sort(inactive_ranks, descending=True)
+        
+        comparison = lambda active, inactive: active < inactive
+
+    else:
+        # **最小化秩策略 (新逻辑)**
+        # 目标：用未激活通道中分数最低的，去替换已激活通道中分数最高的。
+        
+        # 找到已激活通道中分数最高的
+        sorted_active_ranks, sorted_active_indices = torch.sort(active_ranks, descending=True)
+        
+        # 找到未激活通道中分数最低的
+        sorted_inactive_ranks, sorted_inactive_indices = torch.sort(inactive_ranks)
+        
+        comparison = lambda active, inactive: active > inactive
+
     
     refined_mask = copy.deepcopy(base_mask)
     
-    for i in range(num_prune):
-        if sorted_active_ranks[i] < sorted_inactive_ranks[i]:
+    # 执行交换
+    # 使用 min 是为了防止索引越界，以防万一
+    num_to_compare = min(len(sorted_active_ranks), len(sorted_inactive_ranks))
+
+    for i in range(num_to_compare):
+        # 使用上面定义的 comparison 函数进行比较
+        if comparison(sorted_active_ranks[i], sorted_inactive_ranks[i]):
             
+            # 执行交换：将原来激活的变为不激活，不激活的变为激活
             refined_mask[active_indices[sorted_active_indices[i]]] = False
             refined_mask[inactive_indices[sorted_inactive_indices[i]]] = True
         else:
-            # if the rank of the pruned channel is not larger than the reserved channel,
-            # then we do not need to swap
+            # 因为通道已经排序，如果当前最优的交换都不满足条件，后续的更不可能满足
             break
             
-    return refined_mask
+    return refined_mask.float() # 返回 float 类型的 tensor，与输入保持一致
+
+    # ==================== 代码修改结束 ====================

@@ -123,6 +123,8 @@ hrank_group.add_argument('--hrank_trigger_round', type=int, default=20,
                          help='Federated learning round to trigger HRank pruning (e.g., 1 for after round 0, -1 to disable)')
 hrank_group.add_argument('--hrank_representative_batch_size', type=int, default=64,
                          help='Batch size for representative data in HRank analysis')
+hrank_group.add_argument('--last_train_round', type=int, default=50,
+                         help='when to choose final structure of model')
 
 
 if __name__ == '__main__':

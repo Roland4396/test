@@ -44,11 +44,17 @@ class Federator:
         self.use_gpu = args.use_gpu
 
     # 新增方法：用于运行HRank优化
-    def refine_masks_with_hrank(self, representative_dataloader, args, config): # 假设这是函数签名
+    def refine_masks_with_hrank(self, representative_dataloader, args, config, use_max_rank):
         """
-        使用HRank分数来优化现有的idx_dicts，而不是替换它们。
+        使用HRank分数来优化现有的idx_dicts。
+        此函数现在总是重新计算分数，并根据 use_max_rank 决定策略。
         """
         print("Federator: Starting mask refinement process using HRank...")
+        
+        # ==================== 代码修改：函数签名已更新 ====================
+        # 新增了 use_max_rank 参数来控制剪枝策略
+        print(f"Federator: Current strategy is to use {'MAX' if use_max_rank else 'MIN'} rank.")
+        # =============================================================
 
         # 1. 获取全尺寸模型的HRank分数
         analysis_model_params = {**config.model_params[args.data][args.arch], 'scale': 1.0}
@@ -57,15 +63,11 @@ class Federator:
         # 加载当前训练过的模型权重以获得更准确的秩
         analysis_model.load_state_dict(self.global_model.state_dict(), strict=False)
 
-        # =================================================================================
-        # 这是关键的新增代码：将分析模型移动到正确的设备上
-        # =================================================================================
-        # 通过 next(self.global_model.parameters()).device 获取 global_model 所在的设备
+        # 将分析模型移动到正确的设备上
         device = next(self.global_model.parameters()).device
         analysis_model.to(device)
-        # =================================================================================
         
-        # 调用 get_filter_ranks (这里使用我们之前修改好的、只接受两个参数的版本)
+        # 调用 get_filter_ranks
         filter_ranks_per_layer = get_filter_ranks(
             analysis_model, representative_dataloader
         )
@@ -79,7 +81,6 @@ class Federator:
 
         print("  HRank scores calculated. Now refining masks...")
 
-        # (函数余下的部分保持不变)
         # 2. 遍历现有的 idx_dicts，并用HRank分数进行优化
         refined_idx_dicts = []
         for level in range(self.num_levels):
@@ -102,7 +103,12 @@ class Federator:
                 
                 if associated_conv_name and associated_conv_name in filter_ranks_per_layer:
                     hrank_scores = filter_ranks_per_layer[associated_conv_name]
-                    refined_mask = refine_mask_by_swap(base_mask, hrank_scores)
+                    
+                    # ==================== 代码修改：传递策略参数 ====================
+                    # 将 use_max_rank 参数传递给底层的交换函数
+                    refined_mask = refine_mask_by_swap(base_mask, hrank_scores, use_max_rank)
+                    # ============================================================
+                    
                     refined_mask_dict_for_level[param_name] = refined_mask
                 else:
                     refined_mask_dict_for_level[param_name] = base_mask
